@@ -1,10 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import Knob from '$lib/Knob.svelte';
-	import {
-		sendMidi,
-		subscribeMidi
-	} from '$lib/router.js';
+	import { bus } from '$lib/bus.js';
 	import {
 		noteOnBytes,
 		noteOffBytes,
@@ -48,12 +45,13 @@
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(knobs));
 		} catch (_) {}
 	}
+	
 	onMount(() => {
 		try {
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (raw) knobs = JSON.parse(raw);
 		} catch (_) {}
-		const off = subscribeMidi(handleIncoming);
+		const off = bus.onMidi(handleIncoming);
 		return off;
 	});
 
@@ -79,7 +77,7 @@
 	// --- Knobs ---
 	function onKnobChange(k, v) {
 		k.value = v;
-		sendMidi(ccBytes(channel, k.cc, v));
+		bus.sendMidi(ccBytes(channel, k.cc, v));
 		blink();
 	}
 	function onKnobEdit(k, patch) {
@@ -94,10 +92,10 @@
 		learningId = null;
 		saveKnobs();
 		// pousse toutes les valeurs vers le synthé
-		for (const k of knobs) sendMidi(ccBytes(channel, k.cc, k.value));
+		for (const k of knobs) bus.sendMidi(ccBytes(channel, k.cc, k.value));
 	}
 	function sendAll() {
-		for (const k of knobs) sendMidi(ccBytes(channel, k.cc, k.value));
+		for (const k of knobs) bus.sendMidi(ccBytes(channel, k.cc, k.value));
 		blink();
 	}
 
@@ -105,17 +103,17 @@
 	function press(note) {
 		if (activeNotes[note]) return;
 		activeNotes[note] = true;
-		sendMidi(noteOnBytes(channel, note, velocity));
+		bus.sendMidi(noteOnBytes(channel, note, velocity));
 		blink();
 	}
 	function release(note) {
 		if (!activeNotes[note]) return;
 		delete activeNotes[note];
-		sendMidi(noteOffBytes(channel, note));
+		bus.sendMidi(noteOffBytes(channel, note));
 	}
 	function panic() {
-		for (const n of Object.keys(activeNotes)) sendMidi(noteOffBytes(channel, +n));
-		sendMidi(ccBytes(channel, MIDI.ALL_NOTES_OFF, 0));
+		for (const n of Object.keys(activeNotes)) bus.sendMidi(noteOffBytes(channel, +n));
+		bus.sendMidi(ccBytes(channel, MIDI.ALL_NOTES_OFF, 0));
 		activeNotes = {};
 	}
 	function shiftOctave(d) {
@@ -126,11 +124,11 @@
 	// --- Pitch bend (revient au centre au relâchement) ---
 	function onBend(v) {
 		bend = v;
-		sendMidi(pitchBendBytes(channel, v));
+		bus.sendMidi(pitchBendBytes(channel, v));
 	}
 	function releaseBend() {
 		bend = 8192;
-		sendMidi(pitchBendBytes(channel, 8192));
+		bus.sendMidi(pitchBendBytes(channel, 8192));
 	}
 
 	// --- Clavier d'ordinateur ---
